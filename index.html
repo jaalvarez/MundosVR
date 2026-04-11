@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Bosque VR - Meta Quest</title>
+    <title>Bosque VR Pro - Movimiento</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -22,8 +22,10 @@
         import { VRButton } from 'three/addons/webxr/VRButton.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        let scene, camera, renderer, controller1, controller2;
+        let scene, camera, renderer, playerGroup;
+        let controller1, controller2;
         let frutas = [];
+        const clock = new THREE.Clock();
 
         init();
 
@@ -33,7 +35,12 @@
             scene.fog = new THREE.Fog(0x87ceeb, 0, 50);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            // En VR, la altura de la cámara la determina la posición real de tus gafas.
+
+            // --- NUEVO: GRUPO DEL JUGADOR ---
+            // Esto es lo que moveremos con los joysticks
+            playerGroup = new THREE.Group();
+            playerGroup.add(camera);
+            scene.add(playerGroup);
 
             // Iluminación
             scene.add(new THREE.AmbientLight(0xffffff, 0.6));
@@ -43,41 +50,36 @@
 
             // Suelo
             const floor = new THREE.Mesh(
-                new THREE.PlaneGeometry(100, 100),
+                new THREE.PlaneGeometry(200, 200),
                 new THREE.MeshPhongMaterial({ color: 0x2d5a27 })
             );
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
 
-            // Renderer con soporte XR
+            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true; // <--- CRUCIAL para VR
+            renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
-
-            // Añadir botón "ENTER VR"
             document.body.appendChild(VRButton.createButton(renderer));
 
-            // Configurar Mandos (Controllers)
+            // Configurar Mandos
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart); // Gatillo presionado
-            scene.add(controller1);
+            controller1.addEventListener('selectstart', onSelectStart);
+            playerGroup.add(controller1); // Los mandos se mueven con el jugador
 
             controller2 = renderer.xr.getController(1);
             controller2.addEventListener('selectstart', onSelectStart);
-            scene.add(controller2);
+            playerGroup.add(controller2);
 
-            // Visual de los mandos
-            const controllerModelFactory = new XRControllerModelFactory();
-            const conModel1 = controllerModelFactory.createControllerModel(controller1);
-            controller1.add(conModel1);
-            const conModel2 = controllerModelFactory.createControllerModel(controller2);
-            controller2.add(conModel2);
+            const modelFactory = new XRControllerModelFactory();
+            controller1.add(modelFactory.createControllerModel(controller1));
+            controller2.add(modelFactory.createControllerModel(controller2));
 
-            // Crear Bosque
-            for (let i = 0; i < 50; i++) {
-                crearArbol(Math.random() * 60 - 30, Math.random() * 60 - 30);
+            // Bosque
+            for (let i = 0; i < 60; i++) {
+                crearArbol(Math.random() * 100 - 50, Math.random() * 100 - 50);
             }
 
             renderer.setAnimationLoop(render);
@@ -89,7 +91,6 @@
             tronco.position.y = 1.25;
             const copa = new THREE.Mesh(new THREE.SphereGeometry(1.5), new THREE.MeshPhongMaterial({color: 0x1a471a}));
             copa.position.y = 3;
-            
             grupo.add(tronco, copa);
 
             for(let i=0; i<3; i++){
@@ -102,6 +103,43 @@
             scene.add(grupo);
         }
 
+        function handleMovement(delta) {
+            const session = renderer.xr.getSession();
+            if (!session) return;
+
+            // Recorremos los mandos conectados
+            for (const source of session.inputSources) {
+                if (!source.gamepad) continue;
+
+                const axes = source.gamepad.axes; 
+                // axes[2] es horizontal, axes[3] es vertical en el joystick
+                
+                // Mando Izquierdo: Movimiento (Caminar)
+                if (source.handedness === 'left') {
+                    const speed = 3 * delta;
+                    // Obtenemos la dirección hacia donde mira la cámara pero ignoramos la altura (Y)
+                    const direction = new THREE.Vector3();
+                    camera.getWorldDirection(direction);
+                    direction.y = 0;
+                    direction.normalize();
+
+                    const sideways = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
+
+                    // Adelante/Atrás
+                    playerGroup.position.addScaledVector(direction, -axes[3] * speed);
+                    // Izquierda/Derecha
+                    playerGroup.position.addScaledVector(sideways, axes[2] * speed);
+                }
+
+                // Mando Derecho: Rotación
+                if (source.handedness === 'right') {
+                    const rotationSpeed = 2 * delta;
+                    // Girar el grupo del jugador sobre el eje Y
+                    playerGroup.rotation.y -= axes[2] * rotationSpeed;
+                }
+            }
+        }
+
         function onSelectStart(event) {
             const controller = event.target;
             const tempMatrix = new THREE.Matrix4();
@@ -112,16 +150,18 @@
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
             const intersects = raycaster.intersectObjects(frutas);
-
             if (intersects.length > 0) {
                 const item = intersects[0].object;
-                item.visible = false;
-                // Eliminar de la lista de colisiones
-                frutas = frutas.filter(f => f !== item);
+                if (intersects[0].distance < 4) { // Solo si estás cerca
+                    item.visible = false;
+                    frutas = frutas.filter(f => f !== item);
+                }
             }
         }
 
         function render() {
+            const delta = clock.getDelta();
+            handleMovement(delta); // Procesar movimiento en cada frame
             renderer.render(scene, camera);
         }
     </script>
