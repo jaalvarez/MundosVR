@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Bosque VR Pro - Frutas Visibles y Colores</title>
+    <title>Bosque VR - Gatillo y Láser</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -17,57 +17,43 @@
         }
     </script>
 
-    <script type="module">
+    <script ipe="module">
         import * as THREE from 'three';
         import { VRButton } from 'three/addons/webxr/VRButton.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
         let scene, camera, renderer, playerGroup;
         let controller1, controller2;
+        let raycaster;
         let frutas = [];
         const clock = new THREE.Clock();
 
-        // --- PALETAS DE COLORES ---
-        const coloresCopa = [
-            0x1a471a, // Verde pino oscuro
-            0x2d5a27, // Verde bosque medio
-            0x3e7a3a, // Verde hierba
-            0x5c9a58, // Verde musgo claro
-            0x123512  // Verde muy oscuro
-        ];
-
-        const coloresFruta = [
-            0xff0000, // Rojo brillante
-            0xffd700, // Dorado/Amarillo
-            0xffa500, // Naranja
-            0x800080, // Púrpura/Mora
-            0x00ff00  // Verde lima (fruta inmadura)
-        ];
+        const coloresCopa = [0x1a471a, 0x2d5a27, 0x3e7a3a, 0x5c9a58];
+        const coloresFruta = [0xff0000, 0xffd700, 0xffa500, 0x800080];
 
         init();
 
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87ceeb);
-            scene.fog = new THREE.Fog(0x87ceeb, 0, 70); // Neblina ligeramente más lejana
+            scene.fog = new THREE.Fog(0x87ceeb, 0, 70);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-            // GRUPO DEL JUGADOR
             playerGroup = new THREE.Group();
             playerGroup.add(camera);
             scene.add(playerGroup);
 
             // Iluminación
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5)); // Luz ambiental suave
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
             const sun = new THREE.DirectionalLight(0xffffff, 1);
             sun.position.set(5, 10, 5);
             scene.add(sun);
 
-            // Suelo (Hierba)
+            // Suelo
             const floor = new THREE.Mesh(
                 new THREE.PlaneGeometry(200, 200),
-                new THREE.MeshPhongMaterial({ color: 0x224422 }) // Un poco más oscuro para contraste
+                new THREE.MeshPhongMaterial({ color: 0x224422 })
             );
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
@@ -80,20 +66,46 @@
             document.body.appendChild(renderer.domElement);
             document.body.appendChild(VRButton.createButton(renderer));
 
-            // Configurar Mandos
+            // --- CONFIGURACIÓN DE MANDOS Y LÁSER ---
+            raycaster = new THREE.Raycaster();
+
+            // Función para crear la línea del láser
+            const buildControllerPointer = () => {
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, -5) // El láser mide 5 metros
+                ]);
+                const material = new THREE.LineBasicMaterial({ 
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.5 
+                });
+                return new THREE.Line(geometry, material);
+            };
+
+            const controllerModelFactory = new XRControllerModelFactory();
+
+            // Mando 1
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectstart', onSelectStart); // Gatillo
+            controller1.add(buildControllerPointer()); // Añadir láser visual
             playerGroup.add(controller1);
 
+            const conGrip1 = renderer.xr.getControllerGrip(0);
+            conGrip1.add(controllerModelFactory.createControllerModel(conGrip1));
+            playerGroup.add(conGrip1);
+
+            // Mando 2
             controller2 = renderer.xr.getController(1);
-            controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectstart', onSelectStart); // Gatillo
+            controller2.add(buildControllerPointer()); // Añadir láser visual
             playerGroup.add(controller2);
 
-            const modelFactory = new XRControllerModelFactory();
-            controller1.add(modelFactory.createControllerModel(controller1));
-            controller2.add(modelFactory.createControllerModel(controller2));
+            const conGrip2 = renderer.xr.getControllerGrip(1);
+            conGrip2.add(controllerModelFactory.createControllerModel(conGrip2));
+            playerGroup.add(conGrip2);
 
-            // Generar Bosque
+            // Crear Bosque
             for (let i = 0; i < 60; i++) {
                 crearArbol(Math.random() * 100 - 50, Math.random() * 100 - 50);
             }
@@ -101,57 +113,57 @@
             renderer.setAnimationLoop(render);
         }
 
-        // --- FUNCIÓN MODIFICADA ---
         function crearArbol(x, z) {
             const grupo = new THREE.Group();
-            
-            // 1. Tronco
             const tronco = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 2.5), new THREE.MeshPhongMaterial({color: 0x4d2926}));
             tronco.position.y = 1.25;
 
-            // 2. Copa (Colores variados)
-            const colorCopaAleatorio = coloresCopa[Math.floor(Math.random() * coloresCopa.length)];
+            const copaColor = coloresCopa[Math.floor(Math.random() * coloresCopa.length)];
             const copaRadius = 1.5;
-            const copaYCenter = 3;
-            const copa = new THREE.Mesh(
-                new THREE.SphereGeometry(copaRadius, 16, 16), // Aumentada segmentación para suavidad
-                new THREE.MeshPhongMaterial({color: colorCopaAleatorio})
-            );
-            copa.position.y = copaYCenter;
+            const copaY = 3;
+            const copa = new THREE.Mesh(new THREE.SphereGeometry(copaRadius, 16, 16), new THREE.MeshPhongMaterial({color: copaColor}));
+            copa.position.y = copaY;
             grupo.add(tronco, copa);
 
-            // 3. Frutas (Colores variados, visibles en superficie)
-            const numFrutas = 4; // Un poco más de frutas por árbol
-            for(let i=0; i<numFrutas; i++){
-                const colorFrutaAleatorio = coloresFruta[Math.floor(Math.random() * coloresFruta.length)];
-                const fruta = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.12, 8, 8), 
-                    new THREE.MeshPhongMaterial({color: colorFrutaAleatorio})
-                );
+            for(let i=0; i<4; i++){
+                const fColor = coloresFruta[Math.floor(Math.random() * coloresFruta.length)];
+                const fruta = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshPhongMaterial({color: fColor}));
                 
-                // --- MATEMÁTICAS PARA SUPERFICIE ---
-                // Generar un vector aleatorio normalizado (longitud 1)
-                let surfaceVector = new THREE.Vector3(
-                    Math.random() - 0.5,
-                    Math.random() - 0.5,
-                    Math.random() - 0.5
-                );
-                surfaceVector.normalize();
-
-                // Escalar el vector por el radio de la copa (1.5) 
-                // para ponerlo exactamente en la superficie,
-                // e incrementarlo ligeramente (+0.05) para que "salga" un poco.
-                surfaceVector.multiplyScalar(copaRadius + 0.05);
-
-                // Posicionar la fruta relativa al centro de la copa
-                fruta.position.set(surfaceVector.x, surfaceVector.y + copaYCenter, surfaceVector.z);
+                let vec = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
+                vec.multiplyScalar(copaRadius + 0.05);
+                fruta.position.set(vec.x, vec.y + copaY, vec.z);
 
                 frutas.push(fruta);
                 grupo.add(fruta);
             }
-            
             grupo.position.set(x, 0, z);
             scene.add(grupo);
+        }
+
+        // --- FUNCIÓN DE RECOGIDA CORREGIDA ---
+        function onSelectStart(event) {
+            const controller = event.target;
+            
+            // Creamos una matriz para obtener la dirección real del mando
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.extractRotation(controller.matrixWorld);
+
+            // Configuramos el raycaster desde la posición del mando hacia adelante (-Z)
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+            const intersects = raycaster.intersectObjects(frutas);
+
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                // Distancia máxima de 5 metros (coincide con el láser)
+                if (intersects[0].distance < 5) {
+                    object.visible = false;
+                    // Lo sacamos de la escena y del array
+                    scene.remove(object);
+                    frutas = frutas.filter(f => f !== object);
+                }
+            }
         }
 
         function handleMovement(delta) {
@@ -160,53 +172,26 @@
 
             for (const source of session.inputSources) {
                 if (!source.gamepad) continue;
-
                 const axes = source.gamepad.axes; 
                 
-                // Mando Izquierdo: Movimiento
                 if (source.handedness === 'left') {
-                    const speed = 4 * delta; // Ligeramente más rápido
-                    const direction = new THREE.Vector3();
-                    camera.getWorldDirection(direction);
-                    direction.y = 0;
-                    direction.normalize();
+                    const speed = 4 * delta;
+                    const dir = new THREE.Vector3();
+                    camera.getWorldDirection(dir);
+                    dir.y = 0; dir.normalize();
+                    const side = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
 
-                    const sideways = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
-
-                    playerGroup.position.addScaledVector(direction, -axes[3] * speed);
-                    playerGroup.position.addScaledVector(sideways, axes[2] * speed);
+                    playerGroup.position.addScaledVector(dir, -axes[3] * speed);
+                    playerGroup.position.addScaledVector(side, axes[2] * speed);
                 }
-
-                // Mando Derecho: Rotación
                 if (source.handedness === 'right') {
-                    const rotationSpeed = 2.5 * delta;
-                    playerGroup.rotation.y -= axes[2] * rotationSpeed;
-                }
-            }
-        }
-
-        function onSelectStart(event) {
-            const controller = event.target;
-            const tempMatrix = new THREE.Matrix4();
-            tempMatrix.extractRotation(controller.matrixWorld);
-
-            const raycaster = new THREE.Raycaster();
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-            const intersects = raycaster.intersectObjects(frutas);
-            if (intersects.length > 0) {
-                const item = intersects[0].object;
-                if (intersects[0].distance < 4.5) { // Distancia de agarre
-                    item.visible = false;
-                    frutas = frutas.filter(f => f !== item);
+                    playerGroup.rotation.y -= axes[2] * 2.5 * delta;
                 }
             }
         }
 
         function render() {
-            const delta = clock.getDelta();
-            handleMovement(delta); 
+            handleMovement(clock.getDelta()); 
             renderer.render(scene, camera);
         }
     </script>
