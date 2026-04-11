@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Bosque VR - Meta Quest</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+        let scene, camera, renderer, controller1, controller2;
+        let frutas = [];
+
+        init();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.Fog(0x87ceeb, 0, 50);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // En VR, la altura de la cámara la determina la posición real de tus gafas.
+
+            // Iluminación
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const sun = new THREE.DirectionalLight(0xffffff, 1);
+            sun.position.set(5, 10, 5);
+            scene.add(sun);
+
+            // Suelo
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(100, 100),
+                new THREE.MeshPhongMaterial({ color: 0x2d5a27 })
+            );
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            // Renderer con soporte XR
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true; // <--- CRUCIAL para VR
+            document.body.appendChild(renderer.domElement);
+
+            // Añadir botón "ENTER VR"
+            document.body.appendChild(VRButton.createButton(renderer));
+
+            // Configurar Mandos (Controllers)
+            controller1 = renderer.xr.getController(0);
+            controller1.addEventListener('selectstart', onSelectStart); // Gatillo presionado
+            scene.add(controller1);
+
+            controller2 = renderer.xr.getController(1);
+            controller2.addEventListener('selectstart', onSelectStart);
+            scene.add(controller2);
+
+            // Visual de los mandos
+            const controllerModelFactory = new XRControllerModelFactory();
+            const conModel1 = controllerModelFactory.createControllerModel(controller1);
+            controller1.add(conModel1);
+            const conModel2 = controllerModelFactory.createControllerModel(controller2);
+            controller2.add(conModel2);
+
+            // Crear Bosque
+            for (let i = 0; i < 50; i++) {
+                crearArbol(Math.random() * 60 - 30, Math.random() * 60 - 30);
+            }
+
+            renderer.setAnimationLoop(render);
+        }
+
+        function crearArbol(x, z) {
+            const grupo = new THREE.Group();
+            const tronco = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 2.5), new THREE.MeshPhongMaterial({color: 0x4d2926}));
+            tronco.position.y = 1.25;
+            const copa = new THREE.Mesh(new THREE.SphereGeometry(1.5), new THREE.MeshPhongMaterial({color: 0x1a471a}));
+            copa.position.y = 3;
+            
+            grupo.add(tronco, copa);
+
+            for(let i=0; i<3; i++){
+                const fruta = new THREE.Mesh(new THREE.SphereGeometry(0.12), new THREE.MeshPhongMaterial({color: 0xff0000}));
+                fruta.position.set(Math.random()*1.5-0.75, 2.2 + Math.random(), Math.random()*1.5-0.75);
+                frutas.push(fruta);
+                grupo.add(fruta);
+            }
+            grupo.position.set(x, 0, z);
+            scene.add(grupo);
+        }
+
+        function onSelectStart(event) {
+            const controller = event.target;
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.extractRotation(controller.matrixWorld);
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+            const intersects = raycaster.intersectObjects(frutas);
+
+            if (intersects.length > 0) {
+                const item = intersects[0].object;
+                item.visible = false;
+                // Eliminar de la lista de colisiones
+                frutas = frutas.filter(f => f !== item);
+            }
+        }
+
+        function render() {
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
