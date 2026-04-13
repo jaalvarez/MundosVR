@@ -28,8 +28,22 @@
         let frutas = [];
         const clock = new THREE.Clock();
 
-        const coloresCopa = [0x1a471a, 0x2d5a27, 0x3e7a3a, 0x5c9a58];
-        const coloresFruta = [0xff0000, 0xffd700, 0xffa500, 0x800080];
+        // --- PALETAS DE COLORES ---
+        const coloresCopa = [
+            0x1a471a, // Verde pino oscuro
+            0x2d5a27, // Verde bosque medio
+            0x3e7a3a, // Verde hierba
+            0x5c9a58, // Verde musgo claro
+            0x123512  // Verde muy oscuro
+        ];
+
+        const coloresFruta = [
+            0xff0000, // Rojo brillante
+            0xffd700, // Dorado/Amarillo
+            0xffa500, // Naranja
+            0x800080, // Púrpura/Mora
+            0x00ff00  // Verde lima (fruta inmadura)
+        ];
 
         init();
 
